@@ -2,6 +2,8 @@
 {
 	public class Order
 	{
+		enum PaymentType { Full, Partial }
+
 		//WIP
 		Product Product { get; set; }
 		//WIP
@@ -11,6 +13,5 @@
 		//WIP
 		bool RequiresDelivery { get; set; }
 
-		enum PaymentType { Full, Partial }
 	}
 }

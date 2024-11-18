@@ -6,8 +6,9 @@
 
 		//WIP
 		void TakeOrder(Order order)
-		{
-			
-		}
+		{ }
+		//WIP
+		void GiveOrder(Order order)
+		{ }
 	}
 }
