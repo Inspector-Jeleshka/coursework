@@ -40,35 +40,30 @@ namespace coursework
             set => balance = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(value), "Less than 0");
         }
 
-
-        public void AddOrder(Dictionary<Guid, int> products)
+        public static Client? GetClient(Guid clientID)
         {
-            decimal amountToPay = 0m;
-            var payment = Order.PaymentType.Full;
+			return clients.Find(client => client.clientID == clientID);
+		}
 
-			foreach (Guid productID in products.Keys)
-				amountToPay += Product.GetProduct(productID)?.Price * products[productID] ??
-                    throw new ArgumentException("Incorrect ID", nameof(products));
-
-            if (balance < amountToPay)
-                payment = Order.PaymentType.Partial;
-
-			Order order = new(clientID, products, payment);
-
-            orders.Add(order.OrderID);
-        }
-        public bool TryPayOrder(Guid orderID, int amount)
+        public void PayOrder(Guid orderID, decimal amount)
         {
+            if (amount <= 0 || amount > balance)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+            if (!orders.Contains(orderID))
+                throw new ArgumentException("Not your order", nameof(orderID));
+            
             Order order = Order.GetOrder(orderID) ?? throw new ArgumentException("Incorrect ID", nameof(orderID));
-            decimal amountToPay = order.TotalCost - order.PaidCost;
+            decimal availableAmount = order.TotalCost - order.PaidCost;
 
-            if (balance < amountToPay)
-                return false;
+            if (amount > availableAmount)
+                amount = availableAmount;
 
-            balance -= amountToPay;
-            order.PaidCost += amountToPay;
-
-            return true;
+            balance -= amount;
+            order.MakePayment(amount);
+        }
+        public void AddBalance(decimal amount)
+        {
+            balance += amount > 0 ? amount : throw new ArgumentOutOfRangeException(nameof(amount), "Less or equal to 0");
         }
 	}
 }

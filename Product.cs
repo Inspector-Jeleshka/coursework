@@ -2,7 +2,7 @@
 
 namespace coursework
 {
-    public class Product : ICloneable
+    public class Product
     {
         private static readonly List<Product> products = new();
 
@@ -32,21 +32,11 @@ namespace coursework
 
         public static Product GetProduct(string name, decimal price)
         {
-            return products.Find(product => product.Name == name && product.Price == price) ?? new Product(name, price);
+            return products.Find(product => product.name == name && product.price == price) ?? new Product(name, price);
         }
         public static Product? GetProduct(Guid productID)
         {
-            return products.Find(product => product.ProductID == productID);
-		}
-
-        public Product Clone()
-        {
-            return (Product)MemberwiseClone();
-        }
-
-		object ICloneable.Clone()
-		{
-            return Clone();
+            return products.Find(product => product.productID == productID);
 		}
 	}
 }
