@@ -1,76 +1,47 @@
-﻿using System.Collections.ObjectModel;
+﻿using Newtonsoft.Json;
 
 namespace coursework
 {
+	[JsonObject(MemberSerialization.OptIn)]
 	public class Warehouse
 	{
-		private static readonly List<Warehouse> warehouses = new();
-
-		private readonly Guid warehouseID = Guid.NewGuid();
-		private string address = string.Empty;
-		private decimal balance;
-		private readonly Dictionary<Guid, int> products = new();
-		private readonly List<Guid> orders = new();
-
-
-		public Warehouse(string address, decimal balance = 0m)
+		public Warehouse() { }
+		public Warehouse(Dictionary<Product, int> stock)
 		{
-			Address = address;
-			Balance = balance;
-			warehouses.Add(this);
+			Stock = stock;
 		}
 
+		[JsonProperty]
+		[JsonConverter(typeof(ProductDictionaryConverter))]
+		public Dictionary<Product, int> Stock { get; set; } = new();
 
-		public static ReadOnlyCollection<Warehouse> Warehouses => new(warehouses);
-
-		public Guid WarehouseID => warehouseID;
-		public string Address
+		public void AddProduct(Product product, int quantity)
 		{
-			get => address;
-			set => address = value;
+			if (quantity <= 0)
+				throw new ArgumentOutOfRangeException(nameof(quantity), "Меньше или равно 0");
+
+			if (!Stock.TryAdd(product, quantity))
+				Stock[product] += quantity;
 		}
-		public decimal Balance
+		public bool RemoveProduct(Product product, int quantity)
 		{
-			get => balance;
-			set => balance = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(value), "Less than 0");
+			if (quantity <= 0)
+				throw new ArgumentOutOfRangeException(nameof(quantity), "Меньше или равно 0");
+
+			if (Stock.TryGetValue(product, out int value) && value >= quantity)
+			{
+				Stock[product] -= quantity;
+
+				if (Stock[product] == 0)
+					Stock.Remove(product);
+
+				return true;
+			}
+			return false;
 		}
-		public ReadOnlyDictionary<Guid, int> Products => new(products);
-		public ReadOnlyCollection<Guid> Orders => new(orders);
-
-
-		public void AddBalance(decimal amount)
+		public int GetStock(Product product)
 		{
-			balance += amount > 0 ? amount : throw new ArgumentOutOfRangeException(nameof(amount), "Less or equal to 0");
-		}
-		public void AddProduct(Guid productID, int amount)
-		{
-			if (Product.GetProduct(productID) == null)
-				throw new ArgumentException("Incorrect ID", nameof(productID));
-			if (amount <= 0)
-				throw new ArgumentOutOfRangeException(nameof(amount), "Less or equal to 0");
-
-			if (!products.TryAdd(productID, amount))
-				products[productID] += amount;
-		}
-		public void RemoveProduct(Guid productID, int amount)
-		{
-			if (amount <= 0)
-				throw new ArgumentOutOfRangeException(nameof(amount), "Less or equal to 0");
-
-			products[productID] -= amount;
-
-			if (products[productID] == 0)
-				products.Remove(productID);
-		}
-		public void SetProduct(Guid productID, int amount)
-		{
-			if (amount < 0)
-				throw new ArgumentOutOfRangeException(nameof(amount), "Less than 0");
-
-			products[productID] = amount;
-
-			if (products[productID] == 0)
-				products.Remove(productID);
+			return Stock.TryGetValue(product, out int value) ? value : 0;
 		}
 	}
 }

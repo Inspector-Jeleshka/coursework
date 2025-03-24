@@ -1,142 +1,126 @@
-﻿using System.Collections.ObjectModel;
+﻿using Newtonsoft.Json;
 
 namespace coursework
 {
-    public class Order
-    {
-        private static readonly List<Order> orders = new();
-        
-        private readonly Guid orderID = Guid.NewGuid();
-        private readonly Dictionary<Guid, int> products = new();
-        private readonly Guid customerID;
-        private readonly Guid senderID;
-        private PaymentType payment;
-        private bool requiresDelivery;
-        private decimal totalCost;
-        private decimal paidCost;
-        private OrderStatus status = OrderStatus.Open;
+	[JsonObject(IsReference = true)]
+	public class Order
+	{
+		private decimal paidCost = 0;
+		private DateTime deliveryDate;
 
-
-        public Order(Guid customerID, Guid senderID)
-        {
-            this.customerID = customerID;
-            foreach (var product in products)
-                AddProduct(product.Key, product.Value);
-            Payment = payment;
-            RequiresDelivery = requiresDelivery;
-            orders.Add(this);
-        }
-
-
-        public enum PaymentType { Full, Partial }
-        public enum OrderStatus { Open, Processing, Closed }
-
-
-        public static ReadOnlyCollection<Order> Orders => new(orders);
-        public Guid OrderID => orderID;
-        public ReadOnlyDictionary<Guid, int> Products => new(products);
-        public Guid CustomerID => customerID;
-        public Guid SenderID => senderID;
-        public PaymentType Payment
-        {
-            get => payment;
-            set => payment = status == OrderStatus.Open ? value :
-				throw new InvalidOperationException($"{nameof(Payment)} can be changed only for open order");
+		public Order() { }
+		public Order(Client client, DateTime orderDate)
+		{
+			OrderID = Guid.NewGuid();
+			Client = client;
+			OrderDate = orderDate;
 		}
-        public bool RequiresDelivery
-        {
-            get => requiresDelivery;
-            set => requiresDelivery = status == OrderStatus.Open ? value :
-                throw new InvalidOperationException($"{nameof(RequiresDelivery)} can be changed only for open order");
-        }
-        public decimal TotalCost => totalCost;
-        public decimal PaidCost => paidCost;
-        public OrderStatus Status => status;
 
-
-        public static Order? GetOrder(Guid orderID)
-        {
-            return orders.Find(order => order.orderID == orderID);
-        }
-
-        private void CalculateTotalCost()
-        {
-            totalCost = 0;
-
-            foreach (Guid productID in products.Keys)
-                totalCost += Product.GetProduct(productID)!.Price * products[productID];
-        }
-        public void AddProduct(Guid productID, int amount)
-        {
-            if (Product.GetProduct(productID) == null)
-                throw new ArgumentException("Incorrect ID", nameof(productID));
-            if (amount <= 0)
-                throw new ArgumentOutOfRangeException(nameof(amount), "Less or equal to 0");
-            if (status != OrderStatus.Open)
-                throw new InvalidOperationException($"Incorrect {nameof(Status)} value");
-
-            if (!products.TryAdd(productID, amount))
-                products[productID] += amount;
-
-            totalCost += Product.GetProduct(productID)!.Price * amount;
+		[JsonProperty] public Guid OrderID { get; set; }
+		[JsonProperty] public Client Client { get; set; }
+		[JsonProperty] public DateTime OrderDate { get; set; }
+		[JsonProperty] public DateTime DeliveryDate
+		{
+			get => deliveryDate;
+			set => deliveryDate = value >= OrderDate ? value
+				: throw new ArgumentException("Дата доставки не может быть раньше даты заказа.", nameof(DeliveryDate));
 		}
-        public void RemoveProduct(Guid productID, int amount)
-        {
-            if (amount <= 0)
-				throw new ArgumentOutOfRangeException(nameof(amount), "Less or equal to 0");
-			if (status != OrderStatus.Open)
-				throw new InvalidOperationException($"Incorrect {nameof(Status)} value");
-
-			products[productID] -= amount;
-
-            if (products[productID] == 0)
-                products.Remove(productID);
-
-            totalCost -= Product.GetProduct(productID)!.Price * amount;
-        }
-        public void SetProduct(Guid productID, int amount)
-        {
-			if (amount < 0)
-				throw new ArgumentOutOfRangeException(nameof(amount), "Less than 0");
-			if (status != OrderStatus.Open)
-				throw new InvalidOperationException($"Incorrect {nameof(Status)} value");
-
-			int oldAmount = products[productID];
-            products[productID] = amount;
-
-            if (products[productID] == 0)
-                products.Remove(productID);
-
-            totalCost += Product.GetProduct(productID)!.Price * (amount - oldAmount);
+		[JsonProperty] public List<OrderItem> Items { get; set; } = new();
+		[JsonProperty] public OrderStatus Status { get; set; } = OrderStatus.Draft;
+		[JsonIgnore] public decimal TotalCost => Items.Sum(i => i.TotalPrice);
+		[JsonProperty] public decimal PaidCost
+		{
+			get => paidCost;
+			set => paidCost = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(PaidCost), "Меньше 0");
 		}
-		public decimal CalculateStorageFee(int days)
-        {
-            return days > 5 ? totalCost * (days - 5) * 0.02m : 0;
-        }
-        public void ProcessOrder()
-        {
-            if (status != OrderStatus.Open)
-                throw new InvalidOperationException($"Incorrect {nameof(Status)} value");
-            if (paidCost == 0)
-                throw new InvalidOperationException($"Incorrect {nameof(PaidCost)} value");
-
-            status = OrderStatus.Processing;
-        }
-        public void CloseOrder()
-        {
-            if (status != OrderStatus.Processing)
-                throw new InvalidOperationException($"Incorrect {nameof(Status)} value");
-			if (totalCost != paidCost)
-				throw new InvalidOperationException($"{nameof(PaidCost)} isn't equal to {nameof(TotalCost)}");
-
-            status = OrderStatus.Closed;
+		[JsonIgnore] public bool IsPaid => PaidCost >= TotalCost + StorageCost;
+		[JsonProperty] public bool RequiresDelivery { get; set; } = false;
+		[JsonProperty] public bool IsDeliveryPaid { get; set; } = false;
+		[JsonIgnore] public decimal StorageCost
+		{
+			get
+			{
+				DateTime currentDate = DateTime.Now;
+				if (!RequiresDelivery && currentDate > DeliveryDate.AddDays(5))
+				{
+					int daysOverdue = (currentDate - DeliveryDate.AddDays(5)).Days;
+					return TotalCost * daysOverdue * 0.02m;
+				}
+				return 0;
+			}
 		}
-        public void MakePayment(decimal amount)
-        {
-            if (amount <= 0 || amount + paidCost > totalCost)
-                throw new ArgumentOutOfRangeException(nameof(amount));
 
-            paidCost += amount;
-        }
-    }
+		public bool CanBeCompleted(Warehouse warehouse)
+		{
+			return (Status == OrderStatus.Processing) && IsPaid && (RequiresDelivery == IsDeliveryPaid) && CanBeFulfilled(warehouse);
+		}
+		public bool CanBeFulfilled(Warehouse warehouse)
+		{
+			foreach (var item in Items)
+				if (warehouse.GetStock(item.Product) < item.Quantity)
+					return false;
+
+			return true;
+		}
+	}
+
+	public enum OrderStatus { Draft, Processing, Completed }
+
+	[JsonObject(IsReference = true)]
+	public class OrderItem
+	{
+		private int quantity;
+
+		public OrderItem() { }
+		public OrderItem(Product product, int quantity)
+		{
+			Product = product;
+			Quantity = quantity;
+		}
+		public OrderItem(OrderItem other)
+		{
+			Product = other.Product;
+			Quantity = other.Quantity;
+		}
+
+		[JsonProperty] public Product Product { get; set; }
+		[JsonProperty] public int Quantity
+		{
+			get => quantity;
+			set => quantity = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(Quantity), "Меньше или равно 0");
+		}
+		[JsonIgnore] public decimal TotalPrice => Product.Price * Quantity;
+	}
+
+	[JsonObject(IsReference = true)]
+	public class SupplierOrder
+	{
+		private DateTime deliveryDate;
+
+		public SupplierOrder() { }
+		public SupplierOrder(Supplier supplier, DateTime orderDate)
+		{
+			OrderID = Guid.NewGuid();
+			Supplier = supplier;
+			OrderDate = orderDate;
+		}
+
+		[JsonProperty] public Guid OrderID { get; set; }
+		[JsonProperty] public Supplier Supplier { get; set; }
+		[JsonProperty] public DateTime OrderDate { get; set; }
+		[JsonProperty] public DateTime ExpectedDeliveryDate
+		{
+			get => deliveryDate;
+			set => deliveryDate = value >= OrderDate ? value
+				: throw new ArgumentException("Дата доставки не может быть раньше даты заказа.", nameof(ExpectedDeliveryDate));
+		}
+		[JsonProperty] public List<OrderItem> Items { get; set; } = new();
+		[JsonProperty] public OrderStatus Status { get; set; } = OrderStatus.Draft;
+		[JsonIgnore] public decimal TotalCost => Items.Sum(i => i.TotalPrice);
+
+		public bool CanBeCompleted()
+		{
+			return Status == OrderStatus.Processing;
+		}
+	}
 }

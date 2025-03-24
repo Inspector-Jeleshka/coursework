@@ -1,4 +1,6 @@
-﻿namespace coursework
+﻿using coursework.Forms;
+
+namespace coursework
 {
     internal static class Program
     {

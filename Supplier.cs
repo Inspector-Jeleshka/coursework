@@ -1,25 +1,25 @@
-﻿using System.Collections.ObjectModel;
+﻿using Newtonsoft.Json;
 
 namespace coursework
 {
+	[JsonObject(IsReference = true)]
 	public class Supplier
 	{
-		private static readonly List<Supplier> suppliers = new();
-		
-		private readonly Guid supplierID = Guid.NewGuid();
-		//private string name = string.Empty;
-
-
-		public Supplier(string name)
+		public Supplier() { }
+		public Supplier(string name, List<Product>? products = null)
 		{
+			SupplierID = Guid.NewGuid();
 			Name = name;
-			suppliers.Add(this);
+			SuppliedProducts = products ?? new();
 		}
 
+		[JsonProperty] public Guid SupplierID { get; set; }
+		[JsonProperty] public string Name { get; set; }
+		[JsonProperty] public List<Product> SuppliedProducts { get; set; }
 
-		public static ReadOnlyCollection<Supplier> Suppliers => new(suppliers);
-
-		public Guid SupplierID => supplierID;
-		public string Name { get; set; } = string.Empty;
+		public override string ToString()
+		{
+			return Name;
+		}
 	}
 }
